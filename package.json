@@ -1,0 +1,15 @@
+{
+  "name": "spck",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Spck is an online editor.",
+  "main": "index.js",
+  "scripts": {
+    "gh-pages": "gh-pages -d builds/latest"
+  },
+  "devDependencies": {
+    "gh-pages": "^1.2.0"
+  },
+  "author": "Zeb Zhao",
+  "license": "Apache-2.0"
+}
