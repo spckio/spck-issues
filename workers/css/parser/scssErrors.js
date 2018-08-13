@@ -1,0 +1,5 @@
+!function(e){if("object"==typeof module&&"object"==typeof module.exports){var t=e(require,exports);void 0!==t&&(module.exports=t)}else"function"==typeof define&&define.amd&&define(["require","exports","vscode-nls"],e)}(function(e,t){/*---------------------------------------------------------------------------------------------
+     *  Copyright (c) Microsoft Corporation. All rights reserved.
+     *  Licensed under the MIT License. See License.txt in the project root for license information.
+     *--------------------------------------------------------------------------------------------*/
+"use strict";Object.defineProperty(t,"__esModule",{value:!0});var o=e("vscode-nls"),r=o.loadMessageBundle(),s=function(){function e(e,t){this.id=e,this.message=t}return e}();t.SCSSIssueType=s,t.SCSSParseError={FromExpected:new s("scss-fromexpected",r("expected.from","'from' expected")),ThroughOrToExpected:new s("scss-throughexpected",r("expected.through","'through' or 'to' expected")),InExpected:new s("scss-fromexpected",r("expected.in","'in' expected"))}});
