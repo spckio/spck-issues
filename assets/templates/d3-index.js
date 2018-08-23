@@ -30,15 +30,14 @@ var text = svg.append("text")
   .text("{{=d.heading}}")
   .style("text-anchor", "middle");
 
-
-function redraw(polygon) {
+function redraw (polygon) {
   polygon
     .attr("d", function(d) { return "M" + d.join("L") + "Z"; })
     .style("fill", function(d) { return color(d.data); })
     .style("stroke", function(d) { return color(d.data); });
 }
 
-function color(d) {
+function color (d) {
   var dx = d[0] - width / 2,
     dy = d[1] - height / 2;
   return d3.lab(100 - (dx * dx + dy * dy) / 5000, dx / 10, dy / 10);
