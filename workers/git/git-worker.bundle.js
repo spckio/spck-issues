@@ -1,5 +1,4 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.buffer = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-(function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -1778,8 +1777,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-}).call(this,require("buffer").Buffer)
-},{"base64-js":2,"buffer":1,"ieee754":3}],2:[function(require,module,exports){
+},{"base64-js":2,"ieee754":3}],2:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -2090,11 +2088,11 @@ function GitFileSystemClass() {
    * Rethrows errors that aren't related to file existence.
    */
   function exists(filepath) {
-    return store.files.get({path: filepath}).then(function (file) {
+    return store.files.get({ path: filepath }).then(function (file) {
       if (file && !file.deleted) {
         return true;
       } else {
-        return store.folders.get({path: filepath}).then(function (folder) {
+        return store.folders.get({ path: filepath }).then(function (folder) {
           return folder && !folder.deleted;
         })
       }
@@ -2106,7 +2104,7 @@ function GitFileSystemClass() {
    */
   function read(filepath, options) {
     options = options || {};
-    return store.files.get({path: filepath}).then(function (file) {
+    return store.files.get({ path: filepath }).then(function (file) {
       if (file) {
         var encoding = options.encoding;
         return store.data.get(file.fid).then(function (data) {
@@ -2145,7 +2143,7 @@ function GitFileSystemClass() {
       } else {
         var folderPath = array.slice(0, index + 1).join('/');
         return promise.then(function () {
-          return store.folders.get({path: folderPath})
+          return store.folders.get({ path: folderPath })
             .then(function (folder) {
               if (!folder) {
                 return _mkdir(folderPath);
@@ -2168,7 +2166,7 @@ function GitFileSystemClass() {
       var data = {};
       var buffer = Buffer.from(contents);
       var writtenFile;
-      return store.files.get({path: filepath})
+      return store.files.get({ path: filepath })
         .then(function (file) {
           var hash = hashGitBlob(buffer);
           var time = Date.now();
@@ -2181,6 +2179,7 @@ function GitFileSystemClass() {
               hash: hash,
               remoteHash: hash,
               remotePath: filepath,
+              mode: options.mode,
               ctimeMs: time,
               mtimeMs: time
             };
@@ -2197,6 +2196,7 @@ function GitFileSystemClass() {
               hash: hash,
               remoteHash: hash,
               remotePath: filepath,
+              mode: options.mode,
               ctimeMs: ctime,
               mtimeMs: time
             };
@@ -2205,6 +2205,7 @@ function GitFileSystemClass() {
               hash: hash,
               remoteHash: hash,
               remotePath: filepath,
+              mode: options.mode,
               ctimeMs: ctime,
               mtimeMs: time
             });
@@ -2231,7 +2232,7 @@ function GitFileSystemClass() {
    * Delete a file without throwing an error if it is already deleted.
    */
   function rm(filepath) {
-    return store.files.get({path: filepath})
+    return store.files.get({ path: filepath })
       .then(function (file) {
         if (file) {
           GlobalEmitter.emit("::remove", { file: file });
@@ -2254,17 +2255,17 @@ function GitFileSystemClass() {
    * Assume removing a directory.
    */
   function rmdir(filepath) {
-    return store.folders.get({path: filepath})
+    return store.folders.get({ path: filepath })
       .then(function (folder) {
         if (folder) {
           GlobalEmitter.emit("::remove", { folder: folder });
-          return store.folders.update(folder.id, {deleted: true})
+          return store.folders.update(folder.id, { deleted: true })
             .then(function () {
               return Promise.all([
                 store.files.where("path").startsWith(filepath + '/').modify(
-                  {deleted: true, ctimeMs: Date.now(), remotePath: null, remoteHash: null}),
+                  { deleted: true, ctimeMs: Date.now(), remotePath: null, remoteHash: null }),
                 store.folders.where("path").startsWith(filepath + '/').modify(
-                  {deleted: true})
+                  { deleted: true })
               ]);
             })
             .then(function () {
@@ -2345,12 +2346,12 @@ function GitFileSystemClass() {
     filepath = normalizePath(filepath);
     // Check if is root folder
     if (filepath.indexOf('/') === -1) return new Stats(FileType.DIRECTORY, 0);
-    return store.files.get({path: filepath}).then(function (file) {
+    return store.files.get({ path: filepath }).then(function (file) {
       if (file) {
-        return new Stats(FileType.FILE, 1, null, 0, file.mtimeMs, file.ctimeMs);
+        return new Stats(FileType.FILE, 1, file.mode, 0, file.mtimeMs, file.ctimeMs);
       }
       else {
-        return store.folders.get({path: filepath}).then(function (folder) {
+        return store.folders.get({ path: filepath }).then(function (folder) {
           if (folder) {
             return new Stats(FileType.DIRECTORY, 0);
           } else {
@@ -2407,7 +2408,7 @@ function GitFileSystemClass() {
       filename,
       setTimeout(function () {
         delete delayedReleases[filename];
-        return store.folders.where("path").equals(filename).modify({deleted: true});
+        return store.folders.where("path").equals(filename).modify({ deleted: true });
       }, delayRelease)
     )
   }
@@ -2539,19 +2540,14 @@ function Stats(
   if (!mode) {
     switch (itemType) {
       case FileType.FILE:
-        self.mode = 0x1a4;
+        self.mode = normalizeMode(33188);  // 0o100644
         break;
       case FileType.DIRECTORY:
       default:
-        self.mode = 0x1ff;
+        self.mode = normalizeMode(16384);  // 0o040000
     }
   } else {
-    self.mode = mode;
-  }
-
-  // Check if mode also includes top-most bits, which indicate the file's type.
-  if (self.mode < 0x1000) {
-    self.mode |= itemType;
+    self.mode = normalizeMode(mode);
   }
 
   Object.defineProperties(self, {
@@ -2622,6 +2618,50 @@ function Stats(
   function chmod(mode) {
     this.mode = (self.mode & 0xF000) | mode;
   }
+
+
+  /**
+   * From https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
+   *
+   * 32-bit mode, split into (high to low bits)
+   *
+   *  4-bit object type
+   *    valid values in binary are 1000 (regular file), 1010 (symbolic link)
+   *    and 1110 (gitlink)
+   *
+   *  3-bit unused
+   *
+   *  9-bit unix permission. Only 0755 and 0644 are valid for regular files.
+   *  Symbolic links and gitlinks have value 0 in this field.
+   */
+  function normalizeMode(mode) {
+    // Note: BrowserFS will use -1 for "unknown"
+    // I need to make it non-negative for these bitshifts to work.
+    var type = mode > 0 ? mode >> 12 : 0
+    // If it isn't valid, assume it as a "regular file"
+    // 0100 = directory
+    // 1000 = regular file
+    // 1010 = symlink
+    // 1110 = gitlink
+    if (
+      type !== 4 &&
+      type !== 8 &&
+      type !== 10 &&
+      type !== 14
+    ) {
+      type = 8
+    }
+    var permissions = mode & 511
+    // Is the file executable? then 755. Else 644.
+    if (permissions & 73) {
+      permissions = 493
+    } else {
+      permissions = 420
+    }
+    // If it's not a regular file, scrub all permissions
+    if (type !== 8) permissions = 0
+    return (type << 12) + permissions
+  }
 }
 
 /*
@@ -2652,27 +2692,27 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 function toArrayBuffer(buf) {
   if (buf instanceof Uint8Array) {
-		// If the buffer isn't a subarray, return the underlying ArrayBuffer
-		if (buf.byteOffset === 0 && buf.byteLength === buf.buffer.byteLength) {
-			return buf.buffer
-		} else if (typeof buf.buffer.slice === 'function') {
-			// Otherwise we need to get a proper copy
-			return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
-		}
-	}
+    // If the buffer isn't a subarray, return the underlying ArrayBuffer
+    if (buf.byteOffset === 0 && buf.byteLength === buf.buffer.byteLength) {
+      return buf.buffer
+    } else if (typeof buf.buffer.slice === 'function') {
+      // Otherwise we need to get a proper copy
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+    }
+  }
 
-	if (Buffer.isBuffer(buf)) {
-		// This is the slow version that will work with any Buffer
-		// implementation (even in old browsers)
-		var arrayCopy = new Uint8Array(buf.length)
-		var len = buf.length
-		for (var i = 0; i < len; i++) {
-			arrayCopy[i] = buf[i]
-		}
-		return arrayCopy.buffer
-	} else {
-		throw new Error('Argument must be a Buffer')
-	}
+  if (Buffer.isBuffer(buf)) {
+    // This is the slow version that will work with any Buffer
+    // implementation (even in old browsers)
+    var arrayCopy = new Uint8Array(buf.length)
+    var len = buf.length
+    for (var i = 0; i < len; i++) {
+      arrayCopy[i] = buf[i]
+    }
+    return arrayCopy.buffer
+  } else {
+    throw new Error('Argument must be a Buffer')
+  }
 }
 
 var fetch3 = self.fetch;
