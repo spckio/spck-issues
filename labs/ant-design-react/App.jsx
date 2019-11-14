@@ -9,8 +9,8 @@ import {
   Skeleton
 } from 'antd';
 
-const { SubMenu } = Menu;
-const { Header, Content, Sider } = Layout;
+var { SubMenu } = Menu;
+var { Header, Content, Sider } = Layout;
 
 ReactDOM.render(
   <Layout style={{height: '100%'}}>

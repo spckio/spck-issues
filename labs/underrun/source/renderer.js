@@ -28,7 +28,7 @@ var
 		'varying vec3 vl;' +
 		'varying vec2 vuv;',
 	shader_uniform = 'uniform ',
-	shader_const_mat4 = "const mat4 ",
+	shader_const_mat4 = "var mat4 ",
 
 	vertex_shader = 
 		shader_varying + 

@@ -1,4 +1,4 @@
-const webgl_replace = {
+var webgl_replace = {
 	ACTIVE_ATTRIBUTES: 35721,
 	ACTIVE_ATTRIBUTE_MAX_LENGTH: 35722,
 	ACTIVE_TEXTURE: 34016,
@@ -439,7 +439,7 @@ const webgl_replace = {
 	viewport: "gl.vi"
 };
 
-const sonantxr_replace = {
+var sonantxr_replace = {
 	rowLen: '_rl',
 	endPattern: '_ep',
 	songData: '_sd',
@@ -474,7 +474,7 @@ const sonantxr_replace = {
 	lfo_waveform: '_lw'
 };
 
-const fs = require('fs');
+var fs = require('fs');
 
 fs.readFile(process.argv[2], 'utf8', (err, data) => {
 	for (var name in webgl_replace) {
