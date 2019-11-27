@@ -93,7 +93,6 @@
     "category": "Game",
     "templates": [
       "index.html",
-      "js",
       "js/audio.js",
       "js/bullet.js",
       "js/button.js",
@@ -123,10 +122,8 @@
     "date": "2019-11-27",
     "category": "Game",
     "templates": [
-      "css",
       "css/styles.css",
       "index.html",
-      "js",
       "js/build3d.js",
       "js/collision.js",
       "js/draw3d.js",
@@ -156,7 +153,6 @@
     "category": "Template",
     "templates": [
       "css/page.css",
-      "images",
       "images/avatar.jpg",
       "images/white-image.png",
       "index.html",
