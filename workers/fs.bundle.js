@@ -88,6 +88,9 @@ function ObservableClass() {
 }
 
 function AndroidFileSystemClass() {
+  var EMPTY_ARRAY = []
+  var EMPTY_OBJECT = Object.create(null)
+
   // Does some checks to make sure Android interface matches expectations
   var AndroidRef
   try {
@@ -106,7 +109,7 @@ function AndroidFileSystemClass() {
   this.supported = !!(AndroidRef.getDirectory && AndroidRef.mkdirp && AndroidRef.exists
     && AndroidRef.readFile && AndroidRef.remove && AndroidRef.readlink && AndroidRef.writelink
     && AndroidRef.write && AndroidRef.readdir && AndroidRef.readdirDeep && AndroidRef.lstat
-    && AndroidRef.mv && false)
+    && AndroidRef.mv && AndroidRef.appVersion() >= 19)
 
   if (!this.supported) {
     $warn('AndroidFileSystem is not operational: interface mismatch')
@@ -125,9 +128,9 @@ function AndroidFileSystemClass() {
     remove: path => promisifyStatus(AndroidRef.remove(path)),
     readlink: path => promisifyStatus(AndroidRef.readlink(path)).then(({contents}) => contents),
     writelink: (path, target) => promisifyStatus(AndroidRef.writelink(path, target)),
-    write: (path, contents) => promisifyStatus(AndroidRef.write(path, contents)),
+    write: (path, contents, base64) => promisifyStatus(AndroidRef.write(path, contents, !!base64)),
     exists: path => Promise.resolve(AndroidRef.exists(path)),
-    mkdirp: path => promisifyStatus(AndroidRef.mkdirp(path)),
+    mkdirp: path => promisifyStatus(AndroidRef.mkdirp(path)).then(({contents}) => contents),
     readdir: path => promisifyStatus(AndroidRef.readdir(path)),
     readdirDeep: (path, files, folders) => promisifyStatus(AndroidRef.readdirDeep(path, files, folders)),
     lstat: function (path) {
@@ -136,19 +139,23 @@ function AndroidFileSystemClass() {
       })
     },
     mv: function (oldpath, path) {
-      return promisifyStatus(AndroidRef.mv(oldpath, path)).then(({contents}) => {
-        return {
-          oldpath,
-          path,
-          type: contents
-        }
-      })
+      return promisifyStatus(AndroidRef.mv(oldpath, path)).then(({contents}) => contents)
     }
   })
 
   function promisifyStatus(json) {
-    var data = JSON.parse(json)
-    return data.status ? Promise.reject(data) : Promise.resolve(data)
+    switch (json) {
+      case '{}': {
+        return Promise.resolve(EMPTY_OBJECT)
+      }
+      case '[]': {
+        return Promise.resolve(EMPTY_ARRAY)
+      }
+      default: {
+        var data = JSON.parse(json)
+        return data.status ? Promise.reject(data) : Promise.resolve(data)
+      }
+    }
   }
 }
 
@@ -160,6 +167,7 @@ function GitFileSystemClass(fs) {
   var ERROR_SOURCE = 'GitFileSystemClass'
   var store = IDB,
       inodes = {},
+      cache = null,
       observable = new ObservableClass()
   // Everything marked with * will be used by isomorphic git
   Object.assign(this, {
@@ -168,13 +176,13 @@ function GitFileSystemClass(fs) {
     rmdir, //*
     rm, //*
     readlink, //*
-    writelink, //*
-    write, //*
-    exists, //*
-    mkdir, //*
     readdir, //*
     readdirDeep, //*
     lstat, //*
+    exists, //*
+    writelink, //*
+    write, //*
+    mkdir, //*
     mv,
     migrate,
     inode,
@@ -182,7 +190,9 @@ function GitFileSystemClass(fs) {
     dirname,
     basename,
     observable,
+    isIDB,
     isBinaryContent,
+    normalizePath,
     uuid4: _id
   })
 
@@ -217,7 +227,7 @@ function GitFileSystemClass(fs) {
    */
   function exists(filepath) {
     filepath = normalizePath(filepath)
-    if (fs.supported) return Promise.resolve(fs.exists(filepath))
+    if (fs.supported && !isIDB(filepath)) return Promise.resolve(fs.exists(filepath))
     return lookupFile(filepath).then(file => {
       if (file) {
         return true
@@ -253,9 +263,10 @@ function GitFileSystemClass(fs) {
    * Move an existing file or folder.
    */
   function mv(oldpath, path) {
+    if (cache) cache = null
     oldpath = normalizePath(oldpath)
     path = normalizePath(path)
-    var promise = (fs.supported ? fs.mv(oldpath, path) :
+    var promise = (fs.supported && !isIDB(oldpath) ? fs.mv(oldpath, path) :
       lookupFile(oldpath).then(file => {
         if (file) {
           var mtimeMs = Date.now()
@@ -315,7 +326,7 @@ function GitFileSystemClass(fs) {
   /**
    * Migrates an existing project from indexedDB to filesystem
    */
-  function migrate(oldpath, path, fsOnly, progressCb) {
+  function migrate(oldpath, path, progressCb) {
     oldpath = normalizePath(oldpath)
     path = normalizePath(path)
     // Migrate to filesystem
@@ -326,7 +337,8 @@ function GitFileSystemClass(fs) {
         data: files,
         promiseGenerator: function (file) {
           return store.data.get(file.fid).then(data => {
-            return write(file.path, data.text)
+            var filepath = file.path.replace(oldpath, path)
+            return write(filepath, data.text)
               .then(() => {
                 loaded += 1
                 progressCb({loaded, total, phase: 'Migrating files'})
@@ -354,7 +366,7 @@ function GitFileSystemClass(fs) {
   function readFile(filepath, options = {}) {
     filepath = normalizePath(filepath)
     var encoding = options.encoding
-    if (fs.supported) return fs.readFile(filepath, encoding)
+    if (fs.supported && !isIDB(filepath)) return fs.readFile(filepath, encoding)
     return lookupFile(filepath).then(file => {
       if (file) {
 
@@ -395,29 +407,26 @@ function GitFileSystemClass(fs) {
    * Make a directory (or series of nested directories) without throwing an error if it already exists.
    */
   function mkdir(path) {
+    path = normalizePath(path)
     var promise
-    if (fs.supported) {
+    if (fs.supported && !isIDB(path)) {
       promise = fs.mkdirp(path)
-    }
-    else {
+    } else {
       var foldersToCreate = path.split('/').map((name, index, array) => {
         return array.slice(0, index + 1).join('/')
       })
       promise = store.folders.where('path').anyOf(foldersToCreate).keys(existing => {
         var paths = foldersToCreate.filter(p => !existing.includes(p))
-        if (paths.length > 0) {
-          return _mkdirs(paths).then(() => paths)
-        } else {
-          return paths
-        }
+        if (paths.length > 0) return _mkdirs(paths)
+        else return false
       })
     }
-    return promise.then(paths => {
-      if (paths.length > 0) {
+    return promise.then(created => {
+      if (created) {
+        if (cache) cache = null
         return observable.run({
           action: 'mkdir',
           path,
-          paths,
           type: 'folder'
         })
       }
@@ -428,12 +437,13 @@ function GitFileSystemClass(fs) {
    * Write a file (creating missing directories if need be) without throwing errors.
    */
   function write(path, contents, options) {
+    if (cache) cache = null
     contents = contents || ''
     var {mode, target} = options || {}
     return mkdir(dirname(path)).then(() => {
       var binary = isArrayBuffer(contents)
-      var promise = (fs.supported ?
-        fs.write(path, binary ? Buffer.from(contents).toString('base64') : contents) :
+      var promise = (fs.supported && !isIDB(path) ?
+        fs.write(path, binary ? Buffer.from(contents).toString('base64') : contents, binary) :
         lookupFile(path).then(file => {
           var mtimeMs = Date.now()
           var fid = file ? file.id : _id()
@@ -479,9 +489,9 @@ function GitFileSystemClass(fs) {
     path = normalizePath(path)
     if (temp) {
       // Use a unique id to prevent collisions
-      return mv(path, `.trash/${path}~${_id()}`)
+      return mv(path, `${temp}${path}~${_id()}`)
     } else {
-      return (fs.supported ? fs.remove(path) :
+      return (fs.supported && !isIDB(path) ? fs.remove(path) :
         lookupFile(path)
           .then(file => {
             if (file) {
@@ -526,10 +536,10 @@ function GitFileSystemClass(fs) {
       .filter(path => path.startsWith(startPath))
       .forEach(path => delete inodes[path])
     if (temp) {
-      return mv(path, '.trash/' + path)
+      return mv(path, temp + path)
     }
     else {
-      var promise = fs.supported ? fs.remove(path) : Promise.all([
+      var promise = fs.supported && !isIDB(dirname) ? fs.remove(path) : Promise.all([
         store.folders.where('path').equals(path).delete(),
         store.files.where('path').startsWith(startPath).delete(),
         store.folders.where('path').startsWith(startPath).delete()
@@ -561,7 +571,7 @@ function GitFileSystemClass(fs) {
       path: null,
       type
     })
-    if (fs.supported) return fs.remove(parent)
+    if (fs.supported && !isIDB(filepath)) return fs.remove(parent)
     return fileCount(parent)
       .then(count => {
         if (count === 0) {
@@ -582,7 +592,7 @@ function GitFileSystemClass(fs) {
    */
   function readdir(dirname) {
     dirname = normalizePath(dirname)
-    if (fs.supported) return Promise.resolve(fs.readdir(dirname))
+    if (fs.supported && !isIDB(dirname)) return Promise.resolve(fs.readdir(dirname))
     return readdirDeep(dirname, {folders: true}).then(paths => {
       var l = dirname.length + 1  // +1 for trailing slash
       return paths
@@ -599,13 +609,18 @@ function GitFileSystemClass(fs) {
     var {files=true, folders=false, relative=false} = opts || {}
     dirname = normalizePath(dirname)
     var startPath = dirname  + '/'
-    return (fs.supported ? fs.readdirDeep(dirname, files, folders) :
+    var key = `readdirDeep(files=${files},folders=${folders},relative=${relative})`
+    if (cache && cache[key]) return Promise.resolve(cache[key])
+    return (fs.supported && !isIDB(dirname) ? fs.readdirDeep(dirname, files, folders) :
       Promise.all([
         folders ? store.folders.where('path').startsWith(startPath).toArray() : [],
         files ? store.files.where('path').startsWith(startPath).toArray() : [],
       ]).then(([folders, files]) => folders.concat(files).map(f => f.path))
     )
-      .then(paths => (relative ? paths.map(p => p.slice(startPath.length)) : paths))
+      .then(paths => {
+        cache = cache || {}
+        return cache[key] = relative ? paths.map(p => p.slice(startPath.length)) : paths
+      })
   }
 
   /**
@@ -614,7 +629,7 @@ function GitFileSystemClass(fs) {
    */
   function lstat(path) {
     path = normalizePath(path)
-    if (fs.supported) return fs.lstat(path)
+    if (fs.supported && !isIDB(path)) return fs.lstat(path)
     return store.files.get({ path }).then(file => {
       if (file) {
         if (file.target) {
@@ -656,7 +671,7 @@ function GitFileSystemClass(fs) {
    */
   function readlink(filepath) {
     filepath = normalizePath(filepath)
-    if (fs.supported) return Promise.resolve(fs.readlink(filepath))
+    if (fs.supported && !isIDB(filepath)) return Promise.resolve(fs.readlink(filepath))
     return lstat(filepath).then(stats => {
       return stats && stats.target
     })
@@ -666,9 +681,10 @@ function GitFileSystemClass(fs) {
    * Write the contents of buffer to a symlink.
    */
   function writelink (filepath, buffer) {
+    if (cache) cache = null
     filepath = normalizePath(filepath)
     var target = buffer.toString('utf8')
-    if (fs.supported) return fs.writelink(filepath, target)
+    if (fs.supported && !isIDB(filepath)) return fs.writelink(filepath, target)
     return write(filepath, '', { target, mode: FileType.SYMLINK })
       .then(({mode, mtimeMs}) => ({
         mode,
@@ -707,7 +723,7 @@ function GitFileSystemClass(fs) {
       throw new Error('Path must not be empty.')
     }
     return path.split('/')
-      .filter(part => part !== '' && part !== '.')
+      .filter((part, i) => (part !== '' || i === 0) && part !== '.')
       .join('/')
   }
 
@@ -722,6 +738,10 @@ function GitFileSystemClass(fs) {
     var last = path.lastIndexOf('/')
     if (last === -1) return path
     return path.slice(last + 1)
+  }
+
+  function isIDB(path) {
+    return path.startsWith('idb/')
   }
 
   function _mkdirs(paths) {
