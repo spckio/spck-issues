@@ -134,9 +134,10 @@ function AndroidFileSystemClass() {
     readdir: path => promisifyStatus(AndroidRef.readdir(path)),
     readdirDeep: (path, files, folders) => promisifyStatus(AndroidRef.readdirDeep(path, files, folders)),
     lstat: function (path) {
-      return promisifyStatus(AndroidRef.lstat(path)).then(stats => {
-        return new Stats(stats)
-      })
+      return promisifyStatus(AndroidRef.lstat(path))
+        .then(stats => {
+          return new Stats(stats)
+        }, () => null)
     },
     mv: function (oldpath, path) {
       return promisifyStatus(AndroidRef.mv(oldpath, path)).then(({contents}) => contents)
