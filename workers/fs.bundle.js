@@ -141,6 +141,11 @@ function AndroidFileSystemClass() {
     },
     mv: function (oldpath, path) {
       return promisifyStatus(AndroidRef.mv(oldpath, path)).then(({contents}) => contents)
+    },
+    writeExternal: function (uri, content, base64) {
+      if (AndroidRef && AndroidRef.writeExternal) {
+        return promisifyStatus(AndroidRef.writeExternal(uri, content, !!base64))
+      }
     }
   })
 
@@ -190,6 +195,7 @@ function GitFileSystemClass(fs) {
     inodePath,
     dirname,
     basename,
+    relative,
     observable,
     isIDB,
     isBinaryContent,
@@ -733,6 +739,10 @@ function GitFileSystemClass(fs) {
     if (last === -1) return '.'
     if (last === 0) return '/'
     return path.slice(0, last)
+  }
+
+  function relative(path, base) {
+    return base ? path.slice(base.length + 1) : path
   }
 
   function basename(path) {
