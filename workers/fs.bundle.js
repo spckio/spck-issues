@@ -7,8 +7,8 @@ var IDB = createStore()
 var Buffer = buffer.Buffer
 
 function createStore() {
-  var store = new Dexie('ProjectStore')
-  store.version(1).stores({
+  var _store = new Dexie('ProjectStore')
+  _store.version(1).stores({
     projects: 'pid, name, hash, repo',
     files: 'id, &path, &fid, type, hash',
     folders: 'id, &path, hash',
@@ -17,7 +17,7 @@ function createStore() {
     sessions: 'pid',
     meta: 'key'
   })
-  store.version(2).stores({
+  _store.version(2).stores({
     projects: 'pid',
     files: 'id, &path, &fid',
     folders: 'id, &path',
@@ -40,12 +40,13 @@ function createStore() {
       })
     ])
   })
-  return store
+  return _store
 }
 
 var GlobalErrorCodes = {
   ProjectNotFound: 'project:404',
   FileNotFound: 'file:404',
+  FolderNotFound: 'folder:404',
   INodeNotFound: 'inode:404',
   LibraryNotFound: 'library:404',
   EditorSessionNotLinked: 'editor:404',
@@ -131,13 +132,11 @@ function AndroidFileSystemClass() {
     write: (path, contents, base64) => promisifyStatus(AndroidRef.write(path, contents, !!base64)),
     exists: path => Promise.resolve(AndroidRef.exists(path)),
     mkdirp: path => promisifyStatus(AndroidRef.mkdirp(path)).then(({contents}) => contents),
-    readdir: path => promisifyStatus(AndroidRef.readdir(path)),
+    readdir: path => promisifyStatus(AndroidRef.readdir(path)).catch(() => null),
     readdirDeep: (path, files, folders) => promisifyStatus(AndroidRef.readdirDeep(path, files, folders)),
     lstat: function (path) {
       return promisifyStatus(AndroidRef.lstat(path))
-        .then(stats => {
-          return new Stats(stats)
-        }, () => null)
+        .then(stats => new Stats(stats), () => null)
     },
     mv: function (oldpath, path) {
       return promisifyStatus(AndroidRef.mv(oldpath, path)).then(({contents}) => contents)
@@ -171,9 +170,12 @@ function AndroidFileSystemClass() {
  */
 function GitFileSystemClass(fs) {
   var ERROR_SOURCE = 'GitFileSystemClass'
-  var store = IDB,
-      inodes = {},
-      cache = null,
+  var _store = IDB,
+      _inodes = new LFUCache(9000, 0),
+      _readdirDeepCache = new LFUCache(50, 0.5),
+      _readdirCache = new LFUCache(500, 0.5),
+      _normPathCache = new LFUCache(800, 0.8),
+      _lstatCache = new LFUCache(50, 0.5),
       observable = new ObservableClass()
   // Everything marked with * will be used by isomorphic git
   Object.assign(this, {
@@ -195,7 +197,8 @@ function GitFileSystemClass(fs) {
     inodePath,
     dirname,
     basename,
-    relative,
+    relativeTo,
+    childOf,
     observable,
     isIDB,
     isBinaryContent,
@@ -211,14 +214,14 @@ function GitFileSystemClass(fs) {
    * Create an unique identifier for a file, that stays the same thru renames.
    */
   function inode(path, renew) {
-    return Promise.resolve((inodes[path] && !renew) ? inodes[path] : (inodes[path] = _id()))
+    return Promise.resolve((!renew && _inodes.get(path)) || _inodes.set(path, _id()))
   }
 
   /**
    * Get path for an existing inode.
    */
   function inodePath(inode) {
-    var result = Object.keys(inodes).find(k => inodes[k] === inode)
+    var result = _inodes.find(inode)
     return result ? Promise.resolve(result) : Promise.reject({
       source: ERROR_SOURCE,
       fn: 'inodePath',
@@ -239,25 +242,26 @@ function GitFileSystemClass(fs) {
       if (file) {
         return true
       } else {
-        return lookupFolder(filepath).then(folder => {
-          return !!folder
-        })
+        return lookupFolder(filepath).then(folder => !!folder)
       }
     })
   }
 
   function lookupFolder(path) {
-    return store.folders.get({ path }).then(folder => {
-      if (folder && folder.target) {
-        return lookupFolder(folder.target)
-      } else {
+    return _store.folders.get({ path }).then(folder => {
+      if (folder) {
         return folder
+      } else {
+        return readlink(path).then(target => {
+          // If target = path then we have a infinite symlink
+          if (target && target !== path) return lookupFolder(target)
+        })
       }
     })
   }
 
   function lookupFile(path) {
-    return store.files.get({ path }).then(file => {
+    return _store.files.get({ path }).then(file => {
       if (file && file.target) {
         return lookupFile(file.target)
       } else {
@@ -270,15 +274,19 @@ function GitFileSystemClass(fs) {
    * Move an existing file or folder.
    */
   function mv(oldpath, path) {
-    if (cache) cache = null
     oldpath = normalizePath(oldpath)
     path = normalizePath(path)
+    if (oldpath === path) return Promise.resolve()
+    _readdirDeepCache.clear()
+    _readdirCache.del(oldpath)
+    _readdirCache.del(dirname(oldpath))
+    _lstatCache.del(oldpath)  // Tricky: cannot use a rename here as it does not modify mtimeMs
     var promise = (fs.supported && !isIDB(oldpath) ? fs.mv(oldpath, path) :
       lookupFile(oldpath).then(file => {
         if (file) {
           var mtimeMs = Date.now()
           return mkdir(dirname(path)).then(() => {
-            return store.files.update(file.id, { path, mtimeMs })
+            return _store.files.update(file.id, { path, mtimeMs })
           }).then(() => 'file')
         } else {
           return lookupFolder(oldpath).then(folder => {
@@ -286,15 +294,15 @@ function GitFileSystemClass(fs) {
               var mtimeMs = Date.now()
               return Promise.all([
                 mkdir(dirname(path)),
-                store.files.where('path').startsWith(oldpath + '/').modify(file => {
+                _store.files.where('path').startsWith(oldpath + '/').modify(file => {
                   file.path = path + file.path.slice(oldpath.length)
                   file.mtimeMs = mtimeMs
                 }),
-                store.folders.where('path').startsWith(oldpath + '/').modify(folder => {
+                _store.folders.where('path').startsWith(oldpath + '/').modify(folder => {
                   folder.path = path + folder.path.slice(oldpath.length)
                   folder.mtimeMs = mtimeMs
                 }),
-                store.folders.update(folder.id, { path, mtimeMs })
+                _store.folders.update(folder.id, { path, mtimeMs })
               ]).then(() => 'folder')
             }
           })
@@ -303,16 +311,14 @@ function GitFileSystemClass(fs) {
     )
     return promise
       .then(type => {
-        if (type === 'file' && inodes[oldpath]) {
-          inodes[path] = inodes[oldpath]
-          delete inodes[oldpath]
+        if (type === 'file') {
+          _inodes.rename(oldpath, path)
         } else if (type === 'folder') {
           var startPath = oldpath + '/'
-          Object.keys(inodes)
+          _inodes.keys()
             .filter(p => p.startsWith(startPath))
             .forEach(p => {
-              inodes[p.replace(oldpath, path)] = inodes[p]
-              delete inodes[p]
+              _inodes.rename(p, p.replace(oldpath, path))
             })
         }
         if (type) {
@@ -337,19 +343,22 @@ function GitFileSystemClass(fs) {
     oldpath = normalizePath(oldpath)
     path = normalizePath(path)
     // Migrate to filesystem
-    return store.files.where('path').startsWith(oldpath + '/').toArray().then(files => {
+    return _store.files.where('path').startsWith(oldpath + '/').toArray().then(files => {
       var total = files.length
       var loaded = 0
       return PromisePool({
         data: files,
         promiseGenerator: function (file) {
-          return store.data.get(file.fid).then(data => {
-            var filepath = file.path.replace(oldpath, path)
-            return write(filepath, data.text)
-              .then(() => {
-                loaded += 1
-                progressCb({loaded, total, phase: 'Migrating files'})
-              })
+          return _store.data.get(file.fid).then(data => {
+            // Sometimes file is null? not sure how...
+            if (file && file.path) {
+              var filepath = file.path.replace(oldpath, path)
+              return write(filepath, data.text)
+                .then(() => {
+                  loaded += 1
+                  progressCb({loaded, total, phase: 'Migrating files'})
+                })
+            }
           })
         },
         maxConcurrency: 6,
@@ -376,8 +385,7 @@ function GitFileSystemClass(fs) {
     if (fs.supported && !isIDB(filepath)) return fs.readFile(filepath, encoding)
     return lookupFile(filepath).then(file => {
       if (file) {
-
-        return store.data.get(file.fid).then(data => {
+        return _store.data.get(file.fid).then(data => {
           var text = (data && data.text) || ''
           var dataEncoding = (data && data.encoding) || ''
           if (dataEncoding) {
@@ -422,7 +430,7 @@ function GitFileSystemClass(fs) {
       var foldersToCreate = path.split('/').map((name, index, array) => {
         return array.slice(0, index + 1).join('/')
       })
-      promise = store.folders.where('path').anyOf(foldersToCreate).keys(existing => {
+      promise = _store.folders.where('path').anyOf(foldersToCreate).keys(existing => {
         var paths = foldersToCreate.filter(p => !existing.includes(p))
         if (paths.length > 0) return _mkdirs(paths)
         else return false
@@ -430,7 +438,7 @@ function GitFileSystemClass(fs) {
     }
     return promise.then(created => {
       if (created) {
-        if (cache) cache = null
+        _readdirDeepCache.clear()
         return observable.run({
           action: 'mkdir',
           path,
@@ -444,10 +452,13 @@ function GitFileSystemClass(fs) {
    * Write a file (creating missing directories if need be) without throwing errors.
    */
   function write(path, contents, options) {
-    if (cache) cache = null
+    path = normalizePath(path)
     contents = contents || ''
     var {mode, target} = options || {}
     return mkdir(dirname(path)).then(() => {
+      _readdirDeepCache.clear()
+      _readdirCache.del(dirname(path))
+      _lstatCache.del(path)
       var binary = isArrayBuffer(contents)
       var promise = (fs.supported && !isIDB(path) ?
         fs.write(path, binary ? Buffer.from(contents).toString('base64') : contents, binary) :
@@ -464,7 +475,7 @@ function GitFileSystemClass(fs) {
             ctimeMs,
             mtimeMs
           }
-          return store.files.put(newFile)
+          return _store.files.put(newFile)
             .then(() => {
               var data = {
                 fid,
@@ -473,7 +484,7 @@ function GitFileSystemClass(fs) {
                 encoding: binary ? 'binary' : 'utf8'
               }
               newFile.size = data.text.length
-              return store.data.put(data).then(() => newFile)
+              return _store.data.put(data).then(() => newFile)
             })
         })
       )
@@ -498,20 +509,29 @@ function GitFileSystemClass(fs) {
       // Use a unique id to prevent collisions
       return mv(path, `${temp}${path}~${_id()}`)
     } else {
-      return (fs.supported && !isIDB(path) ? fs.remove(path) :
-        lookupFile(path)
+      _readdirDeepCache.clear()
+      return (fs.supported && !isIDB(path) ?
+        fs.remove(path).then(removed => {
+          _readdirCache.del(dirname(path))
+          _readdirCache.del(path)
+          _lstatCache.clear()  // TODO: naive way of invalidating cache
+          return removed
+        }) :
+        _store.files.get({ path })  // Note, rm should not follow symlinks
           .then(file => {
             if (file) {
+              _readdirCache.del(dirname(path))
+              _lstatCache.del(path)
               return Promise.all([
-                store.files.delete(file.id),
-                store.data.delete(file.fid)
+                _store.files.delete(file.id),
+                _store.data.delete(file.fid)
               ]).then(() => true)
             }
           })
       )
         .then(removed => {
           if (removed) {
-            delete inodes[path]
+            _inodes.del(path)
             var type = 'file'
             return observable.run({
               action: 'rm',
@@ -536,22 +556,28 @@ function GitFileSystemClass(fs) {
   /**
    * Assume removing a directory.
    */
-  function rmdir(dirname, temp) {
-    var path = normalizePath(dirname)
+  function rmdir(path, temp) {
+    path = normalizePath(path)
     var startPath = path + '/'
-    Object.keys(inodes)
+    _inodes.keys()
       .filter(path => path.startsWith(startPath))
-      .forEach(path => delete inodes[path])
+      .forEach(path => _inodes.del(path))
     if (temp) {
       return mv(path, temp + path)
     }
     else {
-      var promise = fs.supported && !isIDB(dirname) ? fs.remove(path) : Promise.all([
-        store.folders.where('path').equals(path).delete(),
-        store.files.where('path').startsWith(startPath).delete(),
-        store.folders.where('path').startsWith(startPath).delete()
+      var promise = fs.supported && !isIDB(path) ? fs.remove(path) : Promise.all([
+        _store.folders.where('path').equals(path).delete(),
+        _store.files.where('path').startsWith(startPath).delete(),
+        _store.folders.where('path').startsWith(startPath).delete()
       ])
       var type = 'folder'
+      _readdirCache.del(path)
+      _readdirCache.del(dirname(path))
+      _readdirDeepCache.clear()
+      _lstatCache.keys()
+        .filter(path => path.startsWith(startPath))
+        .forEach(path => _lstatCache.del(path))
       return promise.then(() => {
         return observable.run({
           action: 'rmdir',
@@ -567,7 +593,7 @@ function GitFileSystemClass(fs) {
    * Count number of files under a directory (including files in subdirectories).
    */
   function fileCount(dirname) {
-    return store.files.where('path').startsWith(dirname + '/').count()
+    return _store.files.where('path').startsWith(normalizePath(dirname) + '/').count()
   }
 
   function rmEmptyParent(filepath, type) {
@@ -597,16 +623,29 @@ function GitFileSystemClass(fs) {
   /**
    * Read a directory without throwing an error is the directory doesn't exist
    */
-  function readdir(dirname) {
-    dirname = normalizePath(dirname)
-    if (fs.supported && !isIDB(dirname)) return Promise.resolve(fs.readdir(dirname))
-    return readdirDeep(dirname, {folders: true}).then(paths => {
-      var l = dirname.length + 1  // +1 for trailing slash
-      return paths
-        .map(path => path.slice(l))
-        .filter(path => !path.includes('/'))  // Do not return children of children
-        .sort(_compareStrings)
-    })
+  function readdir(path) {
+    path = normalizePath(path)
+    var cached = _readdirCache.get(path)
+    if (cached !== undefined) return Promise.resolve(cached)
+    if (fs.supported && !isIDB(path)) return _readdirCache.set(path, fs.readdir(path))
+    return lookupFolder(path)
+      .then(folder => {
+        if (folder) {
+          var startPath = folder.path + '/'
+          var l = startPath.length
+          return Promise.all([
+            _store.folders.where('path').startsWith(startPath).filter(f => !f.path.slice(l).includes('/')).keys(),
+            _store.files.where('path').startsWith(startPath).filter(f => !f.path.slice(l).includes('/')).keys(),
+          ])
+          .then(([folders, files]) => {
+            var paths = folders.concat(files).map(p => p.slice(l))
+            paths.sort(_compareStrings)
+            return _readdirCache.set(path, paths)
+          })
+        } else {
+          return _readdirCache.set(path, null)
+        }
+      })
   }
 
   /**
@@ -616,18 +655,20 @@ function GitFileSystemClass(fs) {
     var {files=true, folders=false, relative=false} = opts || {}
     dirname = normalizePath(dirname)
     var startPath = dirname  + '/'
+    var l = startPath.length
     var key = `readdirDeep(files=${files},folders=${folders},relative=${relative})`
-    if (cache && cache[key]) return Promise.resolve(cache[key])
+    var cached = _readdirDeepCache.get(key)
+    if (cached) return Promise.resolve(cached)
     return (fs.supported && !isIDB(dirname) ? fs.readdirDeep(dirname, files, folders) :
       Promise.all([
-        folders ? store.folders.where('path').startsWith(startPath).toArray() : [],
-        files ? store.files.where('path').startsWith(startPath).toArray() : [],
-      ]).then(([folders, files]) => folders.concat(files).map(f => f.path))
+        !folders ? [] :
+            _store.folders.where('path').startsWith(startPath).keys(),
+        !files ? [] :
+          _store.files.where('path').startsWith(startPath).keys(),
+      ])
+      .then(([folders, files]) => folders.concat(files))
+      .then(paths => _readdirDeepCache.set(key, relative ? paths.map(p => p.slice(l)) : paths))
     )
-      .then(paths => {
-        cache = cache || {}
-        return cache[key] = relative ? paths.map(p => p.slice(startPath.length)) : paths
-      })
   }
 
   /**
@@ -636,61 +677,66 @@ function GitFileSystemClass(fs) {
    */
   function lstat(path) {
     path = normalizePath(path)
-    if (fs.supported && !isIDB(path)) return fs.lstat(path)
-    return store.files.get({ path }).then(file => {
-      if (file) {
-        if (file.target) {
-          return new Stats({
-            size: 1,
-            mode: FileTypeModes.SYMLINK,
-            mtimeMs: file.mtimeMs,
-            ctimeMs: file.ctimeMs
-          })
-        } else {
-          return new Stats({
-            size: 1,
-            mode: FileTypeModes.FILE,
-            mtimeMs: file.mtimeMs,
-            ctimeMs: file.ctimeMs
+    var cached = _lstatCache.get(path)
+    if (cached !== undefined) return Promise.resolve(cached)
+    else if (fs.supported && !isIDB(path)) {
+      return fs.lstat(path).then(stats => _lstatCache.set(path, stats))
+    } else {
+      return _store.files.get({ path }).then(file => {
+        if (file) {
+          if (file.target) {
+            return _lstatCache.set(path, new Stats({
+              size: 1,
+              mode: FileTypeModes.SYMLINK,
+              mtimeMs: file.mtimeMs,
+              ctimeMs: file.ctimeMs
+            }))
+          } else {
+            return _lstatCache.set(path, new Stats({
+              size: 1,
+              mode: FileTypeModes.FILE,
+              mtimeMs: file.mtimeMs,
+              ctimeMs: file.ctimeMs
+            }))
+          }
+        }
+        else {
+          return _store.folders.get({ path }).then(folder => {
+            if (folder) {
+              return _lstatCache.set(path, new Stats({
+                size: 0,
+                mode: FileTypeModes.DIRECTORY,
+                mtimeMs: folder.mtimeMs,
+                ctimeMs: folder.ctimeMs
+              }))
+            } else {
+              return _lstatCache.set(path, null)
+            }
           })
         }
-      }
-      else {
-        return store.folders.get({ path }).then(folder => {
-          if (folder) {
-            return new Stats({
-              size: 0,
-              mode: FileTypeModes.DIRECTORY,
-              mtimeMs: folder.mtimeMs,
-              ctimeMs: folder.ctimeMs
-            })
-          } else {
-            return null
-          }
-        })
-      }
-    })
+      })
+    }
   }
 
   /**
    * Reads the contents of a symlink if it exists, otherwise returns null.
    * Rethrows errors that aren't related to file existance.
    */
-  function readlink(filepath) {
-    filepath = normalizePath(filepath)
-    if (fs.supported && !isIDB(filepath)) return Promise.resolve(fs.readlink(filepath))
-    return lstat(filepath).then(stats => {
-      return stats && stats.target
-    })
+  function readlink(path) {
+    path = normalizePath(path)
+    if (fs.supported && !isIDB(path)) return Promise.resolve(fs.readlink(path))
+    return _store.files.get({ path }).then(f => (f && f.target) || null)
   }
 
   /**
    * Write the contents of buffer to a symlink.
    */
-  function writelink (filepath, buffer) {
-    if (cache) cache = null
+  function writelink(filepath, buffer) {
     filepath = normalizePath(filepath)
     var target = buffer.toString('utf8')
+    _readdirDeepCache.clear()
+    _readdirCache.del(dirname(filepath))
+    _lstatCache.del(filepath)
     if (fs.supported && !isIDB(filepath)) return fs.writelink(filepath, target)
     return write(filepath, '', { target, mode: FileType.SYMLINK })
       .then(({mode, mtimeMs}) => ({
@@ -724,14 +770,21 @@ function GitFileSystemClass(fs) {
    * @param {string} path
    */
   function normalizePath(path) {
-    if (path.indexOf('\u0000') >= 0) {
-      throw new Error('Path must be a string without null bytes.')
-    } else if (path === '') {
-      throw new Error('Path must not be empty.')
+    var cached = _normPathCache.get(path)
+    if (cached) return cached
+    else {
+      if (path.indexOf('\u0000') >= 0) {
+        throw new Error('Path must be a string without null bytes.')
+      } else if (path === '') {
+        throw new Error('Path must not be empty.')
+      }
+      return _normPathCache.set(
+        path,
+        path.split('/')
+          .filter((part, i) => (part !== '' || i === 0) && part !== '.')
+          .join('/')
+      )
     }
-    return path.split('/')
-      .filter((part, i) => (part !== '' || i === 0) && part !== '.')
-      .join('/')
   }
 
   function dirname(path) {
@@ -741,8 +794,14 @@ function GitFileSystemClass(fs) {
     return path.slice(0, last)
   }
 
-  function relative(path, base) {
+  function relativeTo(path, base) {
     return base ? path.slice(base.length + 1) : path
+  }
+
+  function childOf(path, base) {
+    path = normalizePath(path)
+    base = normalizePath(base)
+    return path.startsWith(base + '/') || path === base
   }
 
   function basename(path) {
@@ -763,7 +822,7 @@ function GitFileSystemClass(fs) {
       mtimeMs: time,
       ctimeMs: time
     }))
-    return store.folders.bulkAdd(folders)
+    return _store.folders.bulkAdd(folders)
   }
 
   function isArrayBuffer(value) {
