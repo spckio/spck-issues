@@ -161,7 +161,8 @@ var GlobalErrorCodes = {
   LibraryNotFound: 'library:404',
   EditorSessionNotLinked: 'editor:404',
   GitOperationTimeout: 'git:408',
-  AcquireLockFileFail: 'lock:500'
+  AcquireLockFileFail: 'lock:500',
+  CriticalDeletionError: 'delete:500'
 }
 
 var $warn = console ? console.warn : (() => {})
@@ -201,6 +202,7 @@ function ObservableClass() {
 function AndroidFileSystemClass() {
   var EMPTY_ARRAY = []
   var EMPTY_OBJECT = Object.create(null)
+  var ERROR_SOURCE = 'AndroidFileSystemClass'
 
   // Does some checks to make sure Android interface matches expectations
   var AndroidRef
@@ -228,7 +230,9 @@ function AndroidFileSystemClass() {
   }
 
   Object.assign(this, {
-    getDirectory: () => AndroidRef.getDirectory(),
+    getDirectory: () => {
+      return this._directory || (this._directory = AndroidRef.getDirectory())
+    },
     readFile: (path, encoding) => promisifyStatus(AndroidRef.readFile(path, encoding)).then(({contents}) => {
       if (encoding === 'utf8') {
         return contents
@@ -236,7 +240,18 @@ function AndroidFileSystemClass() {
         return Buffer.from(contents, 'base64')
       }
     }),
-    remove: path => promisifyStatus(AndroidRef.remove(path)),
+    remove: path => {
+      if (path === this._directory) {
+        return Promise.reject({
+          source: ERROR_SOURCE,
+          fn: 'remove',
+          message: 'Critical deletion error.',
+          code: GlobalErrorCodes.CriticalDeletionError
+        })
+      } else {
+        return promisifyStatus(AndroidRef.remove(path))
+      }
+    },
     readlink: path => promisifyStatus(AndroidRef.readlink(path)).then(({contents}) => contents),
     writelink: (path, target) => promisifyStatus(AndroidRef.writelink(path, target)),
     write: (path, contents, base64) => promisifyStatus(AndroidRef.write(path, contents, !!base64)),
@@ -738,12 +753,13 @@ function GitFileSystemClass(fs) {
       path: null,
       type
     })
-    if (fs.supported && !isIDB(filepath)) return fs.remove(parent)
+
     return fileCount(parent)
       .then(count => {
         if (count === 0) {
           // start recursion (delete parent's parent if that is left empty)
-          return rmdir(parent)
+          if (fs.supported && !isIDB(filepath)) return fs.remove(parent)
+          else return rmdir(parent)
         } else {
           return {
             oldpath: filepath,
