@@ -313,8 +313,29 @@ function GitFileSystemClass(fs) {
     isIDB,
     isBinaryContent,
     normalizePath,
+    writeExternal,
+    saveBase64,
     uuid4: _id
   })
+
+  function writeExternal(uri, content, base64) {
+    return (fs.supported && fs.writeExternal(uri, content, base64))
+  }
+
+  function saveBase64(name, contents) {
+    if (AndroidRef && AndroidRef.saveBase64) {
+      // FileSaver doesn't work on Android
+      if (contents instanceof Blob) {
+        contents = Buffer.from(contents, 'binary').toString('base64')
+      } else  {
+        contents = isArrayBuffer(contents) ? Buffer.from(contents).toString('base64') : contents
+      }
+      AndroidRef.saveBase64(contents, name)
+    } else {
+      contents = isArrayBuffer(contents) ? new Blob([contents.buffer]) : contents
+      saveAs(contents, name)
+    }
+  }
 
   function isBinaryContent(content) {
     return Buffer.from(content.slice(0, 8000)).some(value => value === 0)
