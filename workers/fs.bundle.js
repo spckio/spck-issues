@@ -758,7 +758,7 @@ function GitFileSystemClass(fs) {
       .then(count => {
         if (count === 0) {
           // start recursion (delete parent's parent if that is left empty)
-          if (fs.supported && !isIDB(filepath)) return fs.remove(parent)
+          if (fs.supported && !isIDB(filepath)) return Promise.resolve()
           else return rmdir(parent)
         } else {
           return {
