@@ -215,18 +215,12 @@ function AndroidFileSystemClass() {
   if (!AndroidRef) {
     $warn('AndroidFileSystem is not operational: interface missing')
     this.supported = false
-    return
-  }
-
-  // TODO: last version of IDB with webworkers as we know it
-  this.supported = !!(AndroidRef.getDirectory && AndroidRef.mkdirp && AndroidRef.exists
-    && AndroidRef.readFile && AndroidRef.remove && AndroidRef.readlink && AndroidRef.writelink
-    && AndroidRef.write && AndroidRef.readdir && AndroidRef.readdirDeep && AndroidRef.lstat
-    && AndroidRef.mv && AndroidRef.appVersion() >= 19)
-
-  if (!this.supported) {
-    $warn('AndroidFileSystem is not operational: interface mismatch')
-    return
+  } else {
+    // TODO: last version of IDB with webworkers as we know it
+    this.supported = !!(AndroidRef.getDirectory && AndroidRef.mkdirp && AndroidRef.exists
+      && AndroidRef.readFile && AndroidRef.remove && AndroidRef.readlink && AndroidRef.writelink
+      && AndroidRef.write && AndroidRef.readdir && AndroidRef.readdirDeep && AndroidRef.lstat
+      && AndroidRef.mv && AndroidRef.appVersion() >= 19)
   }
 
   Object.assign(this, {
@@ -272,6 +266,8 @@ function AndroidFileSystemClass() {
       }
     }
   })
+
+  if (!this.supported) $warn('AndroidFileSystem is not operational: interface mismatch')
 
   function promisifyStatus(json) {
     switch (json) {
@@ -713,8 +709,7 @@ function GitFileSystemClass(fs) {
       .forEach(path => _inodes.del(path))
     if (temp) {
       return mv(path, temp + path)
-    }
-    else {
+    } else {
       var promise = fs.supported && !isIDB(path) ? fs.remove(path) : Promise.all([
         _store.folders.where('path').equals(path).delete(),
         _store.files.where('path').startsWith(startPath).delete(),
@@ -742,7 +737,13 @@ function GitFileSystemClass(fs) {
    * Count number of files under a directory (including files in subdirectories).
    */
   function fileCount(dirname) {
-    return _store.files.where('path').startsWith(normalizePath(dirname) + '/').count()
+    if (fs.supported && !isIDB(dirname)) {
+      return readdir(dirname).then(children => {
+        return children ? children.length : null
+      })
+    } else {
+      return _store.files.where('path').startsWith(normalizePath(dirname) + '/').count()
+    }
   }
 
   function rmEmptyParent(filepath, type) {
@@ -758,8 +759,7 @@ function GitFileSystemClass(fs) {
       .then(count => {
         if (count === 0) {
           // start recursion (delete parent's parent if that is left empty)
-          if (fs.supported && !isIDB(filepath)) return Promise.resolve()
-          else return rmdir(parent)
+          return rmdir(parent)
         } else {
           return {
             oldpath: filepath,
@@ -777,7 +777,12 @@ function GitFileSystemClass(fs) {
     path = normalizePath(path)
     var cached = _readdirCache.get(path)
     if (cached !== undefined) return Promise.resolve(cached)
-    if (fs.supported && !isIDB(path)) return _readdirCache.set(path, fs.readdir(path))
+    if (fs.supported && !isIDB(path)) {
+      return fs.readdir(path).then(paths => {
+        if (paths) paths.sort(_compareStrings)
+        return _readdirCache.set(path, paths)
+      })
+    }
     return lookupFolder(path)
       .then(folder => {
         if (folder) {
@@ -817,8 +822,7 @@ function GitFileSystemClass(fs) {
           _store.files.where('path').startsWith(startPath).keys(),
       ])
       .then(([folders, files]) => folders.concat(files))
-      .then(paths => _readdirDeepCache.set(key, relative ? paths.map(p => p.slice(l)) : paths))
-    )
+    ).then(paths => _readdirDeepCache.set(key, relative ? paths.map(p => p.slice(l)) : paths))
   }
 
   /**
@@ -887,7 +891,9 @@ function GitFileSystemClass(fs) {
     _readdirDeepCache.clear()
     _readdirCache.del(dirname(filepath))
     _lstatCache.del(filepath)
-    if (fs.supported && !isIDB(filepath)) return fs.writelink(filepath, target)
+    if (fs.supported && !isIDB(filepath)) {
+      return mkdir(dirname(filepath)).then(() => fs.writelink(filepath, target))
+    }
     return write(filepath, '', { target, mode: FileType.SYMLINK })
       .then(({mode, mtimeMs}) => ({
         mode,
