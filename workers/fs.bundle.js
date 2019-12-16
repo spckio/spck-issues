@@ -314,10 +314,12 @@ function GitFileSystemClass(fs) {
     mkdir, //*
     mv,
     migrate,
+    fileCount,
     inode,
     inodePath,
     dirname,
     basename,
+    join,
     relativeTo,
     childOf,
     observable,
@@ -805,7 +807,7 @@ function GitFileSystemClass(fs) {
     dirname = normalizePath(dirname)
     var startPath = dirname  + '/'
     var l = startPath.length
-    var key = `readdirDeep(files=${files},folders=${folders},relative=${relative})`
+    var key = `(dirname=${dirname},files=${files},folders=${folders},relative=${relative})`
     var cached = _readdirDeepCache.get(key)
     if (cached) return Promise.resolve(cached)
     return (fs.supported && !isIDB(dirname) ? fs.readdirDeep(dirname, files, folders) :
@@ -958,6 +960,10 @@ function GitFileSystemClass(fs) {
     var last = path.lastIndexOf('/')
     if (last === -1) return path
     return path.slice(last + 1)
+  }
+
+  function join(path1, path2) {
+    return (path1 == null || path2 == null) ? null : (path1.replace(/\/$/, '') + '/' + path2.replace(/^\//, ''))
   }
 
   function isIDB(path) {
