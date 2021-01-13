@@ -1,0 +1,16 @@
+{
+  "short_name": "Spck Editor",
+  "name": "Spck Editor PWA",
+  "icons": [
+    {
+      "src":"/assets/img/logo-pwa.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/?utm_source=homescreen",
+  "background_color": "#20272e",
+  "theme_color": "#252b38",
+  "display": "standalone",
+  "viewport":"width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"
+}

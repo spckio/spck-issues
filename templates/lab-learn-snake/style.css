@@ -1,0 +1,208 @@
+body {
+  margin: 0;
+}
+
+.slidecontainer {
+  width: 100%;
+}
+
+.slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #d3d3d3;
+  outline: none;
+  opacity: 0.7;
+  -webkit-transition: 120ms;
+  transition: opacity 120ms;
+  margin-bottom: 20px;
+}
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider:disabled {
+  opacity: 0.2;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.item-container {
+  display: flex;
+  flex-flow: row nowrap;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.checkbox-fullset {
+  display: none;
+}
+
+.checkbox-fullset+label {
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
+  width: fit-content;
+  padding-left: 30px;
+  padding-top: 2px;
+}
+
+.checkbox-fullset+label:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  vertical-align: text-top;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: white;
+  background-color: rgba(160, 160, 160, 0.5);
+  transition: background-color 120ms ease;
+}
+
+.checkbox-fullset:hover+label:before {
+  background-color: rgba(76, 175, 80, 0.4);
+}
+
+.checkbox-fullset:focus+label:before {
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12);
+}
+
+.checkbox-fullset:checked+label:before {
+  background-color: rgba(76, 175, 80, 0.7);
+}
+
+.checkbox-fullset:disabled+label {
+  opacity: 0.6;
+  cursor: auto;
+}
+
+.checkbox-fullset:disabled+label:before {
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.checkbox-fullset:checked+label:after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 9px;
+  background: white;
+  width: 2px;
+  height: 2px;
+  box-shadow:
+    2px 0 0 white,
+    4px 0 0 white,
+    4px -2px 0 white,
+    4px -4px 0 white,
+    4px -6px 0 white,
+    4px -8px 0 white;
+  transform: rotate(45deg);
+}
+
+.title-slider {
+  margin: 10px 4px 12px 8px;
+  font-family: sans-serif;
+}
+
+.info-score {
+  margin: 8px 0;
+  font-family: sans-serif;
+  font-variant: small-caps;
+}
+
+button:focus {
+  outline: 0;
+}
+
+.game-canvas {
+  width: 100%;
+  height: 90vw;
+  max-width: 400px;
+  max-height: 360px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.btnGame {
+  cursor: pointer;
+  background-color: rgba(76, 175, 80, 0.7);
+  width: fit-content;
+  height: fit-content;
+  text-align: center;
+  margin: 18px 12px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 24px;
+  box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+
+  font-family: sans-serif;
+  font-variant: small-caps;
+  font-weight: bold;
+  font-size: 18px;
+
+
+  /* max-width: 100%;
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.2);
+    color: rgba(0, 0, 0, 0.6);
+    -webkit-tap-highlight-color: rgba(10, 48, 80, 0.22); */
+}
+
+.btnReset {
+  font-size: 0.9em;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+.btnGame:hover {
+  box-shadow: 0px 0px 6px rgba(0, 0, 0, 0.2);
+  background-color: rgba(76, 175, 80, 0.9);
+}
+
+.btnGame:active {
+  box-shadow: 0px 0px 0px rgba(0, 0, 0, 0.2);
+  background-color: rgba(76, 175, 80, 0.8);
+}
+
+#game-container {
+  display: flex;
+  flex-direction: column;
+  background-color: rgba(220, 220, 220, 0.6);
+  padding: 10px;
+}
+
+#setup-container {
+  padding: 20px;
+}
+
+#game-info {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-around;
+}
+
+#game-setup {
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,8 @@
+{
+  "run": {
+    "type": "file",
+    "task": "npm/build-dev",
+    "file": "dist/index.html",
+    "ignoreCurrent": true
+  }
+}

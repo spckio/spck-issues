@@ -1,0 +1,207 @@
+@import 'fonts.css';
+
+* {
+  touch-action: manipulation;
+}
+
+body {
+  background: #fff;
+  font-family: 'pixelfont';
+  line-height: 1.58;
+  text-align: center;
+  margin: 0;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+b {
+  font-weight: inherit;
+}
+
+canvas {
+  display: block;
+  image-rendering: optimizespeed;
+  image-rendering: pixelated;
+}
+
+.menu {
+  text-align: center;
+  display: block;
+}
+
+.objmenu {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.menuitem {
+  max-width: 200px;
+  margin-left: 30%;
+  margin-right: 30%;
+}
+.game {
+  display: none;
+}
+
+#title {
+  text-align: center;
+  margin: 20px;
+  color: #7b9278;
+  font-size: 48px;
+  font-weight: 400;
+  letter-spacing: -1.5px;
+  line-height: 40px;
+  text-shadow: 0 1px 0 #4c625a;
+}
+
+#title b {
+  color: #eb6b6f;
+}
+
+.obj > canvas {
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.obj {
+  left: -2000px;
+  margin: 40px;
+  opacity: 0;
+  position: absolute;
+  top: -1000px;
+  transform: translateY(40px);
+  transition: margin-bottom 500ms, opacity 500ms, transform 500ms;
+}
+
+.obj.spawn {
+  opacity: 1;
+  position: static;
+  transform: translateY(0);
+}
+
+.obj.despawn {
+  position: static;
+  transform: translateY(-40px);
+}
+
+.controls {
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.controls .obj {
+  transform: translateY(40px) scale3d(1.2, 1.2, 1);
+}
+
+.controls .obj.spawn {
+  transform: translateY(0) scale3d(1, 1, 1);
+}
+
+.controls .obj.despawn {
+  margin-bottom: -100px;
+  pointer-events: none;
+  transform: translateY(-40px) scale3d(0.8, 0.8, 1);
+}
+
+.controls a, .textbox a {
+  border-style: solid;
+  border-width: 4px;
+  border-image-source: url('data:image/svg+xml;utf8,<?xml version="1.0" encoding="UTF-8" ?><svg version="1.1" width="5" height="5" xmlns="http://www.w3.org/2000/svg"><path d="M2 1 h1 v1 h-1 z M1 2 h1 v1 h-1 z M3 2 h1 v1 h-1 z M2 3 h1 v1 h-1 z" fill="rgb(33,37,41)" /></svg>');
+  border-image-repeat: stretch;
+  border-image-width: 2;
+  border-image-slice: 2;
+  border-image-outset: 2;
+  position: relative;
+  display: block;
+  margin: 4px;
+  padding: 8px 15px;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  color: white;
+  background-color: rgba(248, 66, 132, 0.9);
+  font-size: 21px;
+  font-family: 'pixelfont';
+  text-decoration: none;
+}
+
+.controls a:focus {
+  outline: 1px solid rgba(248, 66, 132, 0.9);
+  outline-offset: 2px;
+}
+
+.controls a:active {
+  box-shadow: 0 6px 20px rgba(248, 66, 132, 0.4);
+  transform: translateY(2px);
+}
+
+.controls a[disabled] {
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+.price  {
+  font-size: 15px;
+  top: 0;
+}
+.textbox {
+  background: #fff;
+  font-size: 25px;
+  margin: 100px 60px 0;
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  padding: 20px;
+  width: 525px;
+  /* 744px */
+}
+/* width */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: rgba(248, 66, 132, 0.4);
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(248, 66, 132, 0.9);
+}
+.textbox a {
+  margin: 0 20px 10px;
+}
+
+.textbox p {
+  margin: 0 0 21px;
+}
+
+.minitext {
+  font-size: 18px;
+}
+
+#dwarf-plural, #gold-title, #fullscreen {
+  display: none;
+}
+
+#dwarf-plural {
+  color: #7b9278;
+}
+
+#fullscreen {
+  background: rgba(0, 0, 0, 0.6);
+  bottom: 0;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 100%;
+}

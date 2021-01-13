@@ -1,0 +1,15 @@
+{
+  "run": {
+    "type": "url",
+    "tasks": {
+      "if": [["!exists", "dist/bundle.js"]],
+      "then": ["npm/install-dep", "npm/start"],
+      "else": {
+        "if": [["!urlExists", "http://localhost:9950"]],
+        "then": "npm/start"
+      }
+    },
+    "url": "http://localhost:9950",
+    "ignoreCurrent": true
+  }
+}

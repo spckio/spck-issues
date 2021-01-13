@@ -1,0 +1,23 @@
+{
+  "name": "babel-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "clean": "rm dist/bundle.js",
+    "install-dep": "npm i @babel/preset-env --no-bin-links",
+    "build-dev": "webpack --mode development",
+    "build-prod": "webpack --mode production"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "webpack": "5.1.3",
+    "webpack-cli": "3.3.12",
+    "babel-loader": "8.1.0",
+    "@babel/core": "7.12.1",
+    "@babel/preset-env": "7.12.1"
+  }
+}

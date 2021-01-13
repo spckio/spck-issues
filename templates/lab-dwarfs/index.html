@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dwarfs: There and Back Again</title>
+  <link rel="stylesheet" href="stylesheets/app.css">
+</head>
+
+<body>
+  <div class="obj" id="title">
+    We have <b id="dwarf-count">1</b>
+    dwarf<b id="dwarf-plural">s</b><span id="gold-title">
+    and <b id="gold-count">0</b> gold</span>.
+  </div>
+  <div class="obj" id="fortress">
+    <canvas id="can-fortress"></canvas>
+  </div>
+  <div class="obj" id="forest">
+    <canvas id="can-forest"></canvas>
+  </div>
+  <div class="obj" id="treasure">
+    <canvas id="can-treasure"></canvas>
+  </div>
+  <div class="controls">
+    <div class="obj" id="adventure">
+      <a id="btn-adventure" href="#">Send on Adventure</a>
+    </div>
+    <div class="obj" id="draft">
+      <a id="btn-draft" href="#" disabled>Draft Another Dwarf
+        (<b id="dwarf-cost">1</b> gold)</a>
+    </div>
+    <div class="obj" id="covfefe">
+      <a id="btn-covfefe" href="#" disabled>Hot Coffee
+        (+20% dwarf speed, 10 gold)</a>
+    </div>
+    <div class="obj" id="autorun">
+      <a id="btn-autorun" href="#" disabled>Automated Adventuring
+        (20 gold)</a>
+    </div>
+    <div class="obj" id="fasta">
+      <a id="btn-fasta" href="#" disabled>Red Goes Fasta!
+        (+10% dwarf speed, 25 gold)</a>
+    </div>
+    <div class="obj" id="illuminate">
+      <a id="btn-illuminate" href="#" disabled>Illuminate The Forest
+        (+30% forest speed, 25 gold)</a>
+    </div>
+    <div class="obj" id="turborun">
+      <a id="btn-turborun" href="#" disabled>Turbo Button
+        (2x automation speed, 30 gold)</a>
+    </div>
+    <div class="obj" id="speedrun">
+      <a id="btn-speedrun" href="#" disabled>Intel Core i9
+        (2x automation speed, 40 gold)</a>
+    </div>
+    <div class="obj" id="orbital">
+      <a id="btn-orbital" href="#">Make DwarfsWork Again</a>
+    </div>
+    <div class="obj" id="develop">
+      <a id="btn-develop" href="#" disabled>Develop The Wasteland
+        (+30% wasteland speed, 20 gold)</a>
+    </div>
+    <div class="obj" id="develop2">
+      <a id="btn-develop2" href="#" disabled>Industrial Revolution
+        (2x carry weight, 25 gold)</a>
+    </div>
+    <div class="obj" id="genetic">
+      <a id="btn-genetic" href="#" disabled>Genetic Modification
+        (+50% carry weight, 30 gold)</a>
+    </div>
+    <div class="obj" id="portal">
+      <a id="btn-portal" href="#" disabled>Thinking With Portals
+        (science, 60 gold)</a>
+    </div>
+    <div class="obj" id="delorean">
+      <a id="btn-delorean" href="#" disabled>Build a Time Machine
+        (science, 90 gold)</a>
+    </div>
+    <div class="obj" id="back">
+      <a id="btn-back" href="#">Go Back in Time
+        (and fix history)</a>
+    </div>
+  </div>
+  <div id="fullscreen">
+    <div class="obj" id="kegs">
+      <div class="textbox">
+        <p>Dwarfs have found an unimaginable amount of ale in the forest!</p>
+        <p>One hundred kegs of ale opened and one thousand toasts lifted to the great deeds of heroic
+          warriors!</p>
+        <p>All work has ceased.</p>
+        <a id="btn-continue" href="#">continue</a>
+      </div>
+    </div>
+    <div class="obj" id="nuke">
+      <div class="textbox">
+        <p>It is with a heavy heart that you call in an orbital strike on the dwarfs' position.</p>
+        <p>An unmanned weapons platform in the low orbit comes to life, its servos whirring softly as the
+          cannons lock on.</p>
+        <p>Burning spears of light fall towards the forest below. High-explosive shells find their targets
+          in a deadly gale of blazing destruction.</p>
+        <a id="btn-continue2" href="#">continue</a>
+      </div>
+    </div>
+  </div>
+  </section>
+  <script src="javascript/reverbgen.js"></script>
+  <script src="javascript/audio.js"></script>
+  <script src="javascript/oborona.js"></script>
+  <script src="javascript/setup.js"></script>
+  <script src="javascript/font.js"></script>
+  <script src="javascript/cleartype.js"></script>
+  <script src="javascript/canvas.js"></script>
+  <script src="javascript/dwarfs.js"></script>
+  <script src="javascript/gold.js"></script>
+  <script src="javascript/zones.js"></script>
+  <script src="javascript/mainloop.js"></script>
+  <script src="javascript/app.js"></script>
+  <script src="javascript/actions.js"></script>
+  <script src="javascript/pages.js"></script>
+</body>
+
+</html>

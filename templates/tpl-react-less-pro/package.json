@@ -1,0 +1,33 @@
+{
+  "name": "tpl-react-less-pro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "clean": "rm dist/bundle.js",
+    "install-dep": "npm i @babel/preset-env @babel/preset-react css-loader --no-bin-links",
+    "build-dev": "webpack --mode development",
+    "build-prod": "webpack --mode production",
+    "start": "webpack serve --hot --mode development"
+  },
+  "dependencies": {
+    "react": "^16.14.0",
+    "react-dom": "^16.14.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.1.3",
+    "webpack-cli": "^4.0.0",
+    "@babel/preset-react": "^7.12.1",
+    "babel-loader": "^8.1.0",
+    "@babel/core": "^7.12.1",
+    "@babel/preset-env": "^7.12.1",
+    "css-loader": "^5.0.0",
+    "less-loader": "^7.0.2",
+    "less": "^3.12.2",
+    "style-loader": "^2.0.0",
+    "webpack-dev-server": "^3.11.0"
+  }
+}
